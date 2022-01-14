@@ -578,7 +578,7 @@ rtsp_session_handle create_rtsp_session(rtsp_demo_handle demo,rtsp_codec_id code
 
 
 #define RTP_MAX_PKTSIZ	((1500-42)/4*4)
-#define VRTP_MAX_NBPKTS	(300)
+#define VRTP_MAX_NBPKTS	(1000)
 #define ARTP_MAX_NBPKTS	(10)
 #define VRTP_PT_ID		(96)
 #define ARTP_PT_ID		(97)
@@ -2167,6 +2167,10 @@ int rtsp_server_write_video(int chn, const uint8_t *frame, int len, uint64_t ts)
     }
 	if(g_rtsplive[chn]==NULL || g_session[chn]==NULL){
         err("chn %d not init \n",chn);
+        return RTSP_FAIL;
+	}
+    if(frame==NULL){
+        err("send frame null \n");
         return RTSP_FAIL;
 	}
 	ret = rtsp_sever_tx_video(g_rtsplive[chn],g_session[chn],frame,len,ts);
