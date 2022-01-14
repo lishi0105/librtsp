@@ -5,6 +5,7 @@ build
 *.json
 *.ini
 *.o
+*.a
 .vscode
 .VSCodeCounter
 =======
