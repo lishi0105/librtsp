@@ -1,14 +1,14 @@
-<<<<<<< HEAD
+
 Debug
 Release
 build
+install
 *.json
 *.ini
 *.o
 *.a
 .vscode
 .VSCodeCounter
-=======
 # Prerequisites
 *.d
 

@@ -3,8 +3,8 @@
  * @Version: 
  * @Autor: 李石
  * @Date: 2021-11-20 20:49:02
- * @LastEditors: 李石
- * @LastEditTime: 2022-01-12 23:45:53
+ * @LastEditors: lishi
+ * @LastEditTime: 2024-08-08 13:57:57
  */
 #ifndef __RTSP_SERVER_H__
 #define __RTSP_SERVER_H__
@@ -18,8 +18,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#define MAX_SESSION_NUM 64
 
 #define RTSP_SUCCESS     0
 #define RTSP_FAILURE     (-1)
@@ -38,29 +36,31 @@ typedef enum _rtsp_codec_id{
 
 typedef struct _rtsp_cfg
 {
-    int session_count;
-    struct {
-        int port;
-        char suffix[200];
-        rtsp_codec_id videoCodec;
-        rtsp_codec_id audioCodec;
-    } session_cfg[MAX_SESSION_NUM];
+    int port;
+    char suffix[200];
+    rtsp_codec_id videoCodec;
+    rtsp_codec_id audioCodec;
 }rtsp_cfg;
 
-typedef struct _rtsp_sdp
-{
-    int session_count;
-    struct {
-        char url[240];
-    } session_sdp[MAX_SESSION_NUM];
-}rtsp_sdp;
+typedef void *rtsp_demo_handle;
+typedef void *rtsp_session_handle;
 #define RTSP_CALLBACK 
-typedef void (RTSP_CALLBACK* rtspClientConnect)(char *clientIP,int clientPort);
-typedef void (RTSP_CALLBACK* rtspClientDisconnect)(char *clientIP);
-int rtsp_init(rtsp_cfg *cfg,rtsp_sdp *sdp,rtspClientConnect onConnect,rtspClientDisconnect onDisconnect);
-int rtsp_server_write_video(int chn, const uint8_t *frame, int len, uint64_t ts);
-int rtsp_server_write_audio(int chn, const uint8_t *frame, int len, uint64_t ts);
-int rtsp_uinit();
+typedef void (RTSP_CALLBACK* rtspClientConnect)(char *clientIP,int clientPort, void *user_data);
+typedef void (RTSP_CALLBACK* rtspClientDisconnect)(char *clientIP, void *user_data);
+typedef struct _rtsp_handle
+{
+    rtsp_demo_handle g_demo;
+    rtsp_session_handle g_session;
+    rtspClientConnect    pRtspClientConnect;
+    rtspClientDisconnect pRtspClientDisconnect;
+    void *pUserData;
+    char outRtspUrl[240];
+}RtspHandle;
+
+RtspHandle* rtsp_init(const rtsp_cfg *cfg, rtspClientConnect onConnect,rtspClientDisconnect onDisconnect, void *userData);
+int rtsp_server_write_video(const RtspHandle*, const uint8_t *frame, int len, uint64_t ts);
+int rtsp_server_write_audio(const RtspHandle*, const uint8_t *frame, int len, uint64_t ts);
+int rtsp_uinit(RtspHandle* );
 void rtsp_codec_to_char(rtsp_codec_id codecID,char *codecBuf,int buflen);
 
 #ifdef __cplusplus

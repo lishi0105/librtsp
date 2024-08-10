@@ -1,3 +1,11 @@
+/*
+ * @Author: 李石
+ * @Date: 2024-08-07 15:35:50
+ * @LastEditors: lishi
+ * @LastEditTime: 2024-08-08 11:52:23
+ * @Description: 
+ * Copyright (c) 2024 by ${lishi0105@163.com}, All Rights Reserved. 
+ */
 /*************************************************************************
 	> File Name: comm.h
 	> Author: bxq
@@ -10,7 +18,7 @@
 
 #include <stdio.h>
 
-// #define _DEBUG
+#define _DEBUG
 
 #ifdef _DEBUG
 #define dbg(fmt, ...) do {printf("[DEBUG %s:%d:%s] " fmt, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__);} while(0)

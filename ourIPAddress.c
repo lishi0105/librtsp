@@ -42,14 +42,13 @@ struct sockaddr_in var;\
 	var.sin_port = (prt);\
 	SET_SOCKADDR_SIN_LEN(var);
 
-int getOurIpAddr(char *ipaddr) {
+int rtsp_getOurIpAddr(char *ipaddr) {
 	struct sockaddr_in ourAddress;
 	if(ipaddr==NULL)return -1;
 	ourAddress.sin_addr.s_addr = ourIPAddress();
 
 	if (ourAddress.sin_addr.s_addr == 0) {
 		printf("get local ip error!\n");
-		getchar();
 		return -1;
 	}
 
@@ -271,4 +270,39 @@ uint8_t IsMulticastAddress(uint32_t address) {
 	// Note: IPv4-specific #####
 	uint32_t addressInHostOrder = ntohl(address);
 	return addressInHostOrder > 0xE00000FF && addressInHostOrder <= 0xEFFFFFFF;
+}
+
+int rtsp_find_free_port(int port_base, uint32_t range) 
+{
+    int port_end = port_base + range;
+    if(range == 0 || port_base + range > 65535){
+        port_end = 65535;
+    }
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        printf("Unable to create socket\n");
+        return -1;
+    }
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    // 尝试绑定端口，从port_base开始
+    for (int port = port_base; port < port_end; ++port) {
+        addr.sin_port = htons(port);
+
+        // 设置端口重用，这样可以立即重新使用端口
+        int optval = 1;
+        setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+
+        if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
+            close(sock); // 成功后关闭套接字
+            return port; // 返回找到的空闲端口
+        }
+    }
+
+    close(sock); // 关闭套接字，所有端口都尝试过后
+    return -1; // 如果所有端口都被占用，返回-1
 }

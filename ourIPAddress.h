@@ -7,7 +7,8 @@ extern "C" {
 #endif
 #endif /* End of #ifdef __cplusplus */
 
-int getOurIpAddr(char *ipaddr);
+int rtsp_getOurIpAddr(char *ipaddr);
+int rtsp_find_free_port(int port_base, uint32_t range);
 
 #ifdef __cplusplus
 #if __cplusplus

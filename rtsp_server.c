@@ -10,8 +10,12 @@
 #include <string.h>
 #include <errno.h>
 #include <stdint.h>
-
-
+#if defined(__linux__) || defined(linux) || defined(__gnu_linux__)
+#include <time.h>
+#include <sys/time.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#endif
 #include "comm.h"
 #include "rtsp_server.h"
 #include "rtsp_msg.h"
@@ -21,25 +25,17 @@
 #include "utils.h"
 #include "ourIPAddress.h"
 
-typedef void * rtsp_demo_handle;
-typedef void * rtsp_session_handle;
-
-static rtsp_demo_handle g_rtsplive[MAX_SESSION_NUM] = {NULL};
-static rtsp_session_handle g_session[MAX_SESSION_NUM] = {NULL};
-static int 	g_totalChn = 0;
-static rtspClientConnect    pRtspClientConnect = NULL;
-static rtspClientDisconnect pRtspClientDisconnect = NULL;
 //TODO LIST 20160529
 //support authentication
 
-#ifdef __WIN32__
+#if defined(_WIN32) || defined(_WIN64)
 #define MSG_DONTWAIT 0
 #define SK_EAGAIN   (WSAEWOULDBLOCK)
 #define SK_EINTR    (WSAEINTR)
 typedef int SOCKLEN;
 #endif
 
-#ifdef __LINUX__
+#if defined(__linux__) || defined(linux) || defined(__gnu_linux__)
 #define SOCKET_ERROR    (-1)
 #define INVALID_SOCKET  (-1)
 #define SK_EAGAIN   (EAGAIN)
@@ -54,7 +50,7 @@ static int sk_errno (void)
 #ifdef __WIN32__
     return WSAGetLastError();
 #endif
-#ifdef __LINUX__
+#if defined(__linux__) || defined(linux) || defined(__gnu_linux__)
     return (errno);
 #endif
 }
@@ -66,7 +62,7 @@ static const char *sk_strerror (int err)
     sprintf(serr_code_buf, "WSAE-%d", err);
     return serr_code_buf;
 #endif
-#ifdef __LINUX__
+#if defined(__linux__) || defined(linux) || defined(__gnu_linux__)
     return strerror(err);
 #endif
 }
@@ -238,7 +234,7 @@ static void __client_connection_unbind_session (struct rtsp_client_connection *c
 	}
 }
 
-rtsp_demo_handle rtsp_new_demo (int *_port)
+static rtsp_demo_handle rtsp_new_demo (int *_port)
 {
 	struct rtsp_demo *d = NULL;
 	struct sockaddr_in inaddr;
@@ -275,10 +271,10 @@ rtsp_demo_handle rtsp_new_demo (int *_port)
 	} 
 	if (port <= 0)
 		port = 554;
-	#if 1
+	#if 0
 	{
 		int i = 0;
-		for(int i=0;i<10;i++){
+		for(i=0;i<10;i++){
 			memset(&inaddr, 0, sizeof(inaddr));
 			inaddr.sin_family = AF_INET;
 			inaddr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -293,7 +289,7 @@ rtsp_demo_handle rtsp_new_demo (int *_port)
 		}
 	}
 	if (ret == SOCKET_ERROR) {
-		err("port %d bind socket to address failed : %s\n", sk_strerror(sk_errno()));
+		err("port %d bind socket to address failed : %s\n", port, sk_strerror(sk_errno()));
 		closesocket(sockfd);
 		__free_demo(d);
 		return NULL;
@@ -323,14 +319,14 @@ rtsp_demo_handle rtsp_new_demo (int *_port)
 
 	d->sockfd = sockfd;
 
-	//info("rtsp server demo starting on port %d\n", port);
+	info("rtsp server demo starting on port %d\n", port);
 	return (rtsp_demo_handle)d;
 }
 
 #ifdef __WIN32__
 #include <mstcpip.h>
 #endif
-#ifdef __LINUX__
+#if defined(__linux__) || defined(linux) || defined(__gnu_linux__)
 #include <fcntl.h>
 #include <netinet/tcp.h>
 #endif
@@ -341,7 +337,7 @@ static int rtsp_set_client_socket (SOCKET sockfd)
 
 #ifdef __WIN32__
 		unsigned long nonblocked = 1;
-		int sndbufsiz = 1024 * 512;
+		int sndbufsiz = 512 * 1024;
 		int keepalive = 1;
 		struct tcp_keepalive alive_in, alive_out;
 		unsigned long alive_retlen;
@@ -380,8 +376,8 @@ static int rtsp_set_client_socket (SOCKET sockfd)
 		}
 #endif
 
-#ifdef __LINUX__
-		int sndbufsiz = 1024 * 512;
+#if defined(__linux__) || defined(linux) || defined(__gnu_linux__)
+		int sndbufsiz = 512 * 1024;
 		int keepalive = 1;
 		int keepidle = 60;
 		int keepinterval = 3;
@@ -459,7 +455,7 @@ void rtsp_codec_to_char(rtsp_codec_id codecID,char *codecBuf,int buflen)
 	}
 }
 
-static struct rtsp_client_connection *rtsp_new_client_connection (struct rtsp_demo *d)
+static struct rtsp_client_connection *rtsp_new_client_connection (rtspClientConnect connectCB, void *user_data, struct rtsp_demo *d)
 {
 	struct rtsp_client_connection *cc = NULL;
 	struct sockaddr_in inaddr;
@@ -476,8 +472,8 @@ static struct rtsp_client_connection *rtsp_new_client_connection (struct rtsp_de
 
 	info("new rtsp client %s:%u comming\n", 
 			inet_ntoa(inaddr.sin_addr), ntohs(inaddr.sin_port));
-	if(pRtspClientConnect != NULL){
-		pRtspClientConnect(inet_ntoa(inaddr.sin_addr),ntohs(inaddr.sin_port));
+	if(connectCB != NULL){
+		connectCB(inet_ntoa(inaddr.sin_addr),ntohs(inaddr.sin_port), user_data);
 	}
 	cc = __alloc_client_connection(d);
 	if (cc == NULL) {
@@ -493,12 +489,12 @@ static struct rtsp_client_connection *rtsp_new_client_connection (struct rtsp_de
 }
 
 static void rtsp_del_rtp_connection(struct rtsp_client_connection *cc, int isaudio);
-static void rtsp_del_client_connection (struct rtsp_client_connection *cc)
+static void rtsp_del_client_connection (rtspClientDisconnect disconnectCB, void *user_data, struct rtsp_client_connection *cc)
 {
 	if (cc) {
 		info("delete client %d from %s\n", cc->sockfd, inet_ntoa(cc->peer_addr));
-        if(pRtspClientDisconnect != NULL){
-            pRtspClientDisconnect(inet_ntoa(cc->peer_addr));
+        if(disconnectCB != NULL){
+            disconnectCB(inet_ntoa(cc->peer_addr), user_data);
         }
 		__client_connection_unbind_session(cc);
 		rtsp_del_rtp_connection(cc, 0);
@@ -526,7 +522,7 @@ static int rtsp_path_match (const char *main_path, const char *full_path)
 	return 1;
 }
 
-rtsp_session_handle rtsp_new_session (rtsp_demo_handle demo, const char *path)
+static rtsp_session_handle rtsp_new_session (rtsp_demo_handle demo, const char *path)
 {
 	struct rtsp_demo *d = (struct rtsp_demo*)demo;
 	struct rtsp_session *s = NULL;
@@ -560,32 +556,21 @@ fail:
 	return NULL;
 }
 
-rtsp_demo_handle create_rtsp_demo(int *port)
+static rtsp_demo_handle create_rtsp_demo(int *port)
 {
    return rtsp_new_demo(port);
 }
 
 
-rtsp_session_handle create_rtsp_session(rtsp_demo_handle demo,rtsp_codec_id codecID, const char *path)
-{
-    rtsp_session_handle session;
-    session = rtsp_new_session(demo,path);
-    rtsp_set_video(session, codecID, NULL, 0);
-    //rtsp_set_audio(session, RTSP_CODEC_ID_AUDIO_G711A, NULL, 0);
-
-    return session;
-}
-
-
 #define RTP_MAX_PKTSIZ	((1500-42)/4*4)
 #define VRTP_MAX_NBPKTS	(1000)
-#define ARTP_MAX_NBPKTS	(10)
+#define ARTP_MAX_NBPKTS	(100)
 #define VRTP_PT_ID		(96)
 #define ARTP_PT_ID		(97)
 #define VRTSP_SUBPATH	"track1"
 #define ARTSP_SUBPATH	"track2"
 
-int rtsp_set_video (rtsp_session_handle session, int codec_id, const uint8_t *codec_data, int data_len)
+static int rtsp_set_video (rtsp_session_handle session, int codec_id, const uint8_t *codec_data, int data_len)
 {
 	struct rtsp_session *s = (struct rtsp_session*)session;
 	if (!s || (s->vcodec_id != RTSP_CODEC_ID_NONE && s->vcodec_id != codec_id))
@@ -636,7 +621,7 @@ int rtsp_set_video (rtsp_session_handle session, int codec_id, const uint8_t *co
 	return 0;
 }
 
-int rtsp_set_audio (rtsp_session_handle session, int codec_id, const uint8_t *codec_data, int data_len)
+static int rtsp_set_audio (rtsp_session_handle session, int codec_id, const uint8_t *codec_data, int data_len)
 {
 	struct rtsp_session *s = (struct rtsp_session*)session;
 	if (!s || (s->acodec_id != RTSP_CODEC_ID_NONE && s->acodec_id != codec_id))
@@ -690,13 +675,23 @@ int rtsp_set_audio (rtsp_session_handle session, int codec_id, const uint8_t *co
 	return 0;
 }
 
-void rtsp_del_session (rtsp_session_handle session)
+static rtsp_session_handle create_rtsp_session(rtsp_demo_handle demo,rtsp_codec_id codecID, const char *path)
+{
+    rtsp_session_handle session;
+    session = rtsp_new_session(demo,path);
+    rtsp_set_video(session, codecID, NULL, 0);
+    //rtsp_set_audio(session, RTSP_CODEC_ID_AUDIO_G711A, NULL, 0);
+
+    return session;
+}
+
+static void rtsp_del_session (rtspClientDisconnect disconnectCB, void *userData, rtsp_session_handle session)
 {
 	struct rtsp_session *s = (struct rtsp_session*)session;
 	if (s) {
 		struct rtsp_client_connection *cc;
 		while ((cc = TAILQ_FIRST(&s->connections_qhead))) {
-			rtsp_del_client_connection(cc);
+			rtsp_del_client_connection(disconnectCB, userData, cc);
 		}
 		//dbg("del session path: %s\n", s->path);
 		if (s->vstreamq)
@@ -707,7 +702,7 @@ void rtsp_del_session (rtsp_session_handle session)
 	}
 }
 
-void rtsp_del_demo (rtsp_demo_handle demo)
+static void rtsp_del_demo (rtspClientDisconnect disconnectCB, void *userData, rtsp_demo_handle demo)
 {
 	struct rtsp_demo *d = (struct rtsp_demo*)demo;
 	if (d) {
@@ -715,10 +710,10 @@ void rtsp_del_demo (rtsp_demo_handle demo)
 		struct rtsp_client_connection *cc;
 		
 		while ((cc = TAILQ_FIRST(&d->connections_qhead))) {
-			rtsp_del_client_connection(cc);
+			rtsp_del_client_connection(disconnectCB, userData, cc);
 		}
 		while ((s = TAILQ_FIRST(&d->sessions_qhead))) {
-			rtsp_del_session(s);
+			rtsp_del_session(disconnectCB, userData, s);
 		}
 		closesocket(d->sockfd);
 		__free_demo(d);
@@ -1001,8 +996,8 @@ static int rtsp_handle_SETUP(struct rtsp_client_connection *cc, const rtsp_msg_s
 	struct rtsp_session *s = cc->session;
 	struct rtp_connection *rtp = NULL;
 	int istcp = 0, isaudio = 0;
-	char vpath[64] = "";
-	char apath[64] = "";
+	char vpath[128] = "";
+	char apath[128] = "";
 	int ret;
 
 	dbg("\n");
@@ -1114,8 +1109,8 @@ static int rtsp_handle_TEARDOWN(struct rtsp_client_connection *cc, const rtsp_ms
 {
 //	struct rtsp_demo *d = cc->demo;
 	struct rtsp_session *s = cc->session;
-	char vpath[64] = "";
-	char apath[64] = "";
+	char vpath[128] = "";
+	char apath[128] = "";
 	dbg("\n");
 
 	snprintf(vpath, sizeof(vpath) - 1, "%s/%s", s->path, VRTSP_SUBPATH);
@@ -1448,7 +1443,7 @@ static int rtsp_tx_audio_packet (struct rtsp_client_connection *cc)
 	return count;
 }
 
-int rtsp_do_event (rtsp_demo_handle demo)
+static int rtsp_do_event(rtsp_demo_handle demo, rtspClientConnect connectCB, rtspClientDisconnect disconnectCB, void *userData)
 {
 	struct rtsp_demo *d = (struct rtsp_demo*)demo;
 	struct rtsp_client_connection *cc = NULL;
@@ -1543,7 +1538,7 @@ int rtsp_do_event (rtsp_demo_handle demo)
 
 	if (FD_ISSET(d->sockfd, &rfds)) {
 		//new client_connection
-		rtsp_new_client_connection(d);
+		rtsp_new_client_connection(connectCB, userData, d);
 	}
 
 	cc = TAILQ_FIRST(&d->connections_qhead); //NOTE do not use TAILQ_FOREACH
@@ -1564,7 +1559,7 @@ int rtsp_do_event (rtsp_demo_handle demo)
 				if (ret == 0)
 					break;
 				if (ret < 0) {
-					rtsp_del_client_connection(cc1);
+					rtsp_del_client_connection(disconnectCB, userData, cc1);
 					cc1 = NULL;
 					break;
 				}
@@ -1646,7 +1641,7 @@ int rtsp_do_event (rtsp_demo_handle demo)
 
 static int rtcp_try_tx_sr (struct rtp_connection *c, uint64_t ntptime_of_zero_ts, uint64_t ts, uint32_t sample_rate);
 
-int rtsp_tx_video (rtsp_session_handle session, const uint8_t *frame, int len, uint64_t ts)
+static int rtsp_tx_video (rtsp_session_handle session, const uint8_t *frame, int len, uint64_t ts)
 {
 	struct rtsp_session *s = (struct rtsp_session*) session;
 	struct stream_queue *q = NULL;
@@ -1759,9 +1754,13 @@ int rtsp_tx_video (rtsp_session_handle session, const uint8_t *frame, int len, u
 	return len;
 }
 
-int rtsp_sever_tx_video (rtsp_demo_handle demo,rtsp_session_handle session, const uint8_t *frame, int len, uint64_t ts)
+static int rtsp_sever_tx_video(const RtspHandle* pHandle, const uint8_t *frame, int len, uint64_t ts)
 {
-	struct rtsp_session *s = (struct rtsp_session*) session;
+	if(pHandle == NULL || pHandle->g_demo == NULL || pHandle->g_session == NULL){
+		err("Could not get the rtsp session\n");
+		return -1;
+	}
+	struct rtsp_session *s = (struct rtsp_session*) pHandle->g_session;
 	struct stream_queue *q = NULL;
 	struct rtsp_client_connection *cc = NULL;
 	uint8_t *packets[VRTP_MAX_NBPKTS+1] = {NULL};
@@ -1869,12 +1868,12 @@ int rtsp_sever_tx_video (rtsp_demo_handle demo,rtsp_session_handle session, cons
 		rtsp_tx_video_packet(cc);
 	}
 
-    rtsp_do_event(demo);
+    rtsp_do_event(pHandle->g_demo, pHandle->pRtspClientConnect, pHandle->pRtspClientDisconnect, pHandle->pUserData);
      
 	return len;
 }
 
-int rtsp_tx_audio (rtsp_session_handle session, const uint8_t *frame, int len, uint64_t ts)
+static int rtsp_tx_audio (rtsp_session_handle session, const uint8_t *frame, int len, uint64_t ts)
 {
 	struct rtsp_session *s = (struct rtsp_session*) session;
 	struct stream_queue *q = NULL;
@@ -1963,7 +1962,7 @@ int rtsp_tx_audio (rtsp_session_handle session, const uint8_t *frame, int len, u
 }
 
 //return us from system running
-uint64_t rtsp_get_reltime (void)
+static uint64_t rtsp_get_reltime (void)
 {
 #ifdef __WIN32__
 	return (timeGetTime() * 1000ULL);
@@ -1993,13 +1992,13 @@ static uint64_t rtsp_get_abstime (void)
 }
 
 //return us from 1900/1/1 00:00:00
-uint64_t rtsp_get_ntptime (void)
+static uint64_t rtsp_get_ntptime (void)
 {
 #define NTP_OFFSET_US (2208988800000000ULL)
 	return (rtsp_get_abstime() + NTP_OFFSET_US);
 }
 
-int rtsp_sync_video_ts (rtsp_session_handle session, uint64_t ts, uint64_t ntptime)
+static int rtsp_sync_video_ts (rtsp_session_handle session, uint64_t ts, uint64_t ntptime)
 {
 	struct rtsp_session *s = (struct rtsp_session*) session;
 
@@ -2010,7 +2009,7 @@ int rtsp_sync_video_ts (rtsp_session_handle session, uint64_t ts, uint64_t ntpti
 	return 0;
 }
 
-int rtsp_sync_audio_ts (rtsp_session_handle session, uint64_t ts, uint64_t ntptime)
+static int rtsp_sync_audio_ts (rtsp_session_handle session, uint64_t ts, uint64_t ntptime)
 {
 	struct rtsp_session *s = (struct rtsp_session*) session;
 
@@ -2113,101 +2112,117 @@ static int rtcp_try_tx_sr (struct rtp_connection *c, uint64_t ntptime_of_zero_ts
 	return size;
 }
 
-
-int rtsp_init(rtsp_cfg *cfg,rtsp_sdp *sdp,rtspClientConnect onConnect,rtspClientDisconnect onDisconnect)
+static int get_random_free_port(int min_port, int max_port) 
 {
-    int i = 0,num = 0;
-	char ourIPAddr[30]={0};
-    if(cfg==NULL){
-        err("init_rtsp rtsp_cfg = NULL err\n");
-        return RTSP_FAIL;
+    if (min_port > max_port) {
+        printf("Invalid port range\n");
+        return -1;
     }
-	if(sdp==NULL){
-        err("init_rtsp rtsp_sdp = NULL err\n");
-        return RTSP_FAIL;
-    }
-    num = cfg->session_count;
-    if(num < 0||num >= MAX_SESSION_NUM){
-        err("rtsp_cfg->session_count %d must (0~%d)err \n",num,MAX_SESSION_NUM-1);
-        return RTSP_FAIL;
-    }
-	pRtspClientConnect = onConnect;
-    pRtspClientDisconnect = onDisconnect;
-	memset(ourIPAddr,0,sizeof(ourIPAddr));
-	if(getOurIpAddr(ourIPAddr)!=0){
-		memset(ourIPAddr,0,sizeof(ourIPAddr));
-		strcpy(ourIPAddr,"0.0.0.0");
-	}
-	g_totalChn = num;
-	sdp->session_count = g_totalChn;
-    for(i=0;i<num;i++){
-        char sdpBuf[32]={0};
-        g_rtsplive[i] = create_rtsp_demo(&(cfg->session_cfg[i].port));
-        if(g_rtsplive[i]==NULL){
-            err("ch[%d] create_rtsp_demo err!\n", i);
-        }else{
-            g_session[i]= create_rtsp_session(g_rtsplive[i],(rtsp_codec_id)cfg->session_cfg[i].videoCodec,cfg->session_cfg[i].suffix);
-            if(g_session[i]==NULL){
-                err("ch[%d] create_rtsp_session err!\n", i);
-            }
+
+    srand(time(NULL)); // 以时间作为种子初始化随机数生成器
+
+    int port_range = max_port - min_port + 1;
+
+    for (int i = 0; i < port_range; ++i) {
+        int random_port = min_port + rand() % port_range;
+
+        int free_port = rtsp_find_free_port(random_port, 1);
+        if (free_port != -1) {
+            return free_port;
         }
-		memset(sdp->session_sdp[i].url,0,sizeof(sdp->session_sdp[i].url));
-		snprintf(sdp->session_sdp[i].url,sizeof(sdp->session_sdp[i].url),"rtsp://%s:%d%s",ourIPAddr,cfg->session_cfg[i].port,cfg->session_cfg[i].suffix);
-        //printf("\033[0;32mrtsp://%s:%d%s\033[0;39m\n",ourIPAddr,cfg->session_cfg[i].port,cfg->session_cfg[i].suffix);
     }
-    return RTSP_SUCC;
+
+    return -1; // 如果找不到空闲端口，返回-1
 }
 
-int rtsp_server_write_video(int chn, const uint8_t *frame, int len, uint64_t ts)
+RtspHandle* rtsp_init(const rtsp_cfg *cfg, rtspClientConnect onConnect,rtspClientDisconnect onDisconnect, void *userData)
+{
+	char ourIPAddr[22]={0};
+    if(cfg==NULL){
+        err("init_rtsp rtsp_cfg = NULL err\n");
+        return NULL;
+    }
+	RtspHandle *m_rtspHandle = (RtspHandle *)malloc(sizeof(RtspHandle));
+	if(m_rtspHandle == NULL){
+		err("init_rtsp malloc RtspHandle err\n");
+		return NULL;
+	}
+	memset(m_rtspHandle, 0, sizeof(RtspHandle));
+	m_rtspHandle->pRtspClientConnect = onConnect;
+    m_rtspHandle->pRtspClientDisconnect = onDisconnect;
+	m_rtspHandle->pUserData = userData;
+	m_rtspHandle->g_demo = NULL;
+	m_rtspHandle->g_session = NULL;
+	memset(ourIPAddr,0,sizeof(ourIPAddr));
+	if(rtsp_getOurIpAddr(ourIPAddr)!=0){
+		memset(ourIPAddr,0,sizeof(ourIPAddr));
+		strcpy(ourIPAddr,"127.0.0.1");
+	}
+	int dst_port =cfg->port;
+	if(dst_port==0){
+		dst_port = get_random_free_port(10000, 65535);
+	}
+    m_rtspHandle->g_demo = create_rtsp_demo(&dst_port);
+	if(m_rtspHandle->g_demo==NULL){
+		err("create_rtsp_demo err!\n");
+		return NULL;
+	}
+	m_rtspHandle->g_session= create_rtsp_session(m_rtspHandle->g_demo,(rtsp_codec_id)cfg->videoCodec,cfg->suffix);
+	if(m_rtspHandle->g_session==NULL){
+		err("create_rtsp_session err!\n");
+		return NULL;
+	}
+    
+	snprintf(m_rtspHandle->outRtspUrl,sizeof(m_rtspHandle->outRtspUrl), "rtsp://%s:%d%s",ourIPAddr,dst_port,cfg->suffix);
+    return m_rtspHandle;
+}
+
+int rtsp_server_write_video(const RtspHandle* pHandle, const uint8_t *frame, int len, uint64_t ts)
 {
 	int ret = 0;
-	if(chn < 0||chn >= MAX_SESSION_NUM){
-        err("chn %d must (0~%d)err \n",chn,MAX_SESSION_NUM-1);
-        return RTSP_FAIL;
-    }
-	if(g_rtsplive[chn]==NULL || g_session[chn]==NULL){
-        err("chn %d not init \n",chn);
+	if(pHandle == NULL || pHandle->g_demo==NULL || pHandle->g_session==NULL){
+        err("not init \n");
         return RTSP_FAIL;
 	}
     if(frame==NULL){
         err("send frame null \n");
         return RTSP_FAIL;
 	}
-	ret = rtsp_sever_tx_video(g_rtsplive[chn],g_session[chn],frame,len,ts);
-	if(ret<0)return RTSP_FAIL;
-	return RTSP_SUCC;
-}
-int rtsp_server_write_audio(int chn, const uint8_t *frame, int len, uint64_t ts)
-{
-	int ret = 0;
-	if(chn < 0||chn >= MAX_SESSION_NUM){
-        err("chn %d must (0~%d)err \n",chn,MAX_SESSION_NUM-1);
-        return RTSP_FAIL;
-    }
-	if(g_rtsplive[chn]==NULL || g_session[chn]==NULL){
-        err("chn %d not init \n",chn);
-        return RTSP_FAIL;
-	}
-	ret = rtsp_tx_audio(g_session[chn],frame,len,ts);
+	ret = rtsp_sever_tx_video(pHandle,frame,len,ts);
 	if(ret<0)return RTSP_FAIL;
 	return RTSP_SUCC;
 }
 
-int rtsp_uinit()
+int rtsp_server_write_audio(const RtspHandle* pHandle, const uint8_t *frame, int len, uint64_t ts)
 {
-	int i = 0;
-	if(g_totalChn <= 0){
-        return RTSP_SUCC;
-    }
-	for(i=0;i<g_totalChn;i++){
-		if(g_session[i] != NULL){
-            rtsp_del_session(g_session[i]);
-			g_session[i] = NULL;
-		}
-        if(g_rtsplive[i] != NULL){
-            rtsp_del_demo(g_rtsplive[i]);
-			g_session[i] = NULL;
-		}
+	int ret = 0;
+	if(pHandle == NULL || pHandle->g_demo==NULL || pHandle->g_session==NULL){
+        err("not init \n");
+        return RTSP_FAIL;
 	}
+	ret = rtsp_tx_audio(pHandle->g_session,frame,len,ts);
+	if(ret<0)return RTSP_FAIL;
+	return RTSP_SUCC;
+}
+
+int rtsp_uinit(RtspHandle* pHandle)
+{
+	if(pHandle == NULL){
+		err("not init \n");
+		return RTSP_SUCC;
+	}
+	if(pHandle->g_session != NULL){
+		rtsp_del_session(pHandle->pRtspClientDisconnect, pHandle->pUserData, pHandle->g_session);
+		pHandle->g_session = NULL;
+	}
+	if(pHandle->g_demo != NULL){
+		rtsp_del_demo(pHandle->pRtspClientDisconnect, pHandle->pUserData, pHandle->g_demo);
+		pHandle->g_session = NULL;
+	}
+	pHandle->pUserData = NULL;
+	pHandle->pRtspClientConnect = NULL;
+	pHandle->pRtspClientDisconnect = NULL;
+	free(pHandle);
+	pHandle = NULL;
 	return RTSP_SUCC;
 }
