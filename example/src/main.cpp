@@ -4,7 +4,7 @@
  * @Autor: 李石
  * @Date: 2023-10-16 11:57:04
  * @LastEditors: lishi
- * @LastEditTime: 2024-08-12 10:57:54
+ * @LastEditTime: 2024-08-12 15:29:59
  */
 #include <stdio.h>
 #include <unistd.h>
@@ -17,22 +17,11 @@
 #include <vector>
 #include <memory>
 #include <thread>
-#include "rtsp_logger.h"
+#include "rtsp_comm.h"
 #include "RtspFramePusher.hpp"
-
-using namespace RTSP::LOG;
 
 static std::string gl_input_file = "";
 static int32_t gl_input_codec = 0;
-
-void printHexBuf(const uint8_t *p, int size)
-{
-    for(int i = 0; i < size; i++)
-    {
-        printf("%.2X ",p[i]);
-    }
-    printf("\n");
-}
 
 bool parseArgs(int argc, char *argv[])
 {
@@ -82,17 +71,6 @@ bool parseArgs(int argc, char *argv[])
     return true;
 }
 
-void onRtspClientConnect(char *ip, int port, void *user_data)
-{
-    if(ip == NULL)return;
-    RTSP_LOG(TRACE)<<"rtsp client ["<<ip<<":"<<port<<"] login";
-}
-
-void onRtspClientDisconnect(char *ip, void *user_data)
-{
-    RTSP_LOG(TRACE)<<"rtsp client ["<<ip<<"] logout";
-}
-
 int main(int argc, char *argv[])
 {
     if(!parseArgs(argc, argv)){
@@ -102,45 +80,45 @@ int main(int argc, char *argv[])
     const int rtspPortBase = 8553;
     FILE *fp = fopen(gl_input_file.c_str(), "rb");
     if(fp == NULL){
-        RTSP_LOG(ERROR)<<"open video file ["<<gl_input_file<<"] error";
+        rtsp_err("open video file [%s] error\n", gl_input_file.c_str());
         return 0;
     }else{
-        RTSP_LOG(INFO)<<"open video file ["<<gl_input_file<<"] success";
+        rtsp_info("open video file [%s] success\n", gl_input_file.c_str());
     }
     char hdr_file[270] = {0};
     sprintf(hdr_file, "%s.hdr", gl_input_file.c_str());
     FILE *fp_hdr = fopen(hdr_file, "rb");
     if(fp_hdr == NULL){
-        RTSP_LOG(ERROR)<<"open hdr file ["<<hdr_file<<"] error";
+        rtsp_err("open hdr file [%s] error\n", hdr_file);
         return 0;
     }else{
-        RTSP_LOG(INFO)<<"open hdr file ["<<hdr_file<<"] success";
+        rtsp_info("open hdr file [%s] success\n", hdr_file);
     }
     char hdr_buf[64] = {0};
     char frame_buf[1024*1024] = {0};
     auto pRtspPusher = RtspFramePusher::CreateShared("live", "proxyer", gl_input_codec, 8553);
-    RTSP_LOG(INFO)<<pRtspPusher->output_url();
+    rtsp_info("%s\n", pRtspPusher->output_url().c_str());
     if(pRtspPusher == nullptr){
-        RTSP_LOG(ERROR)<<"rtsp init error";
+        rtsp_err("rtsp init error\n");
         return 0;
     }
     while(fgets(hdr_buf, sizeof(hdr_buf), fp_hdr) != NULL){
         int frame_size = atoi(hdr_buf);
         if(frame_size <= 0 || frame_size > (int)(sizeof(frame_buf))){
-            RTSP_LOG(ERROR)<<"frame size ["<<frame_size <<"] error";
+            rtsp_err("frame size [%d] error\n", frame_size);
             break;
         }
         if(fread(frame_buf, 1, frame_size, fp) != (size_t)frame_size){
-            RTSP_LOG(ERROR)<<"read frame error";
+            rtsp_err("fread frame error\n");
             break;
         }
         auto pts = RtspFramePusher::GetMillTimestamp();
-        RTSP_LOG(TRACE)<<"push frame ["<<frame_size<<"] ts: "<<pts;
+        rtsp_dbg("push frame: [%d] ts: [%lu]\n", frame_size, pts);
         pRtspPusher->PushFrameData((uint8_t *)frame_buf, frame_size, pts);
         usleep(40*1000);
     }
     fclose(fp);fp = NULL;
     fclose(fp_hdr);fp_hdr = NULL;
-    RTSP_LOG(INFO)<<"exit";
+    rtsp_warn("exit\n");
     return 0;
 }

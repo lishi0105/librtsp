@@ -16,7 +16,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #endif
-#include "comm.h"
+#include "rtsp_comm.h"
 #include "rtsp_server.h"
 #include "rtsp_msg.h"
 #include "rtp_enc.h"

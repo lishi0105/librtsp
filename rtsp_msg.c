@@ -11,7 +11,7 @@
 #include <time.h>
 #include <ctype.h>
 
-#include "comm.h"
+#include "rtsp_comm.h"
 #include "rtsp_msg.h"
 
 

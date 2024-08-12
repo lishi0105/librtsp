@@ -7,7 +7,7 @@
 
 #include <stdlib.h>
 
-#include "comm.h"
+#include "rtsp_comm.h"
 #include "stream_queue.h"
 
 struct stream_queue *streamq_alloc (int pktsiz, int nbpkts)

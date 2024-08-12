@@ -2,16 +2,15 @@
  * @Author: 李石
  * @Date: 2024-08-07 17:02:50
  * @LastEditors: lishi
- * @LastEditTime: 2024-08-12 10:59:04
+ * @LastEditTime: 2024-08-12 15:27:44
  * @Description: 
  * Copyright (c) 2024 by ${lishi0105@163.com}, All Rights Reserved. 
  */
 #include <iostream>
 #include <string.h>
 #include <time.h>
-#include "rtsp_logger.h"
+#include "rtsp_comm.h"
 #include "RtspFramePusher.hpp"
-using namespace RTSP::LOG;
 
 uint64_t RtspFramePusher::GetMillTimestamp() 
 {
@@ -22,12 +21,14 @@ uint64_t RtspFramePusher::GetMillTimestamp()
 
 void RtspFramePusher::onClientConnect(char *clientIP,int clientPort, void *userData)
 {
-    RTSP_LOG(INFO)<<"["<<clientIP<<":"<<clientPort<<" login]";
+    if(clientIP == NULL)return;
+    rtsp_info("rtsp client[%s:%d] login\n", clientIP, clientPort);
 }
 
 void RtspFramePusher::onClientDisconnect(char *clientIP, void *userData)
 {
-    RTSP_LOG(INFO)<<"["<<clientIP<<" logout]";
+    if(clientIP == NULL)return;
+    rtsp_info("rtsp client [%s] logout\n", clientIP);
 }
 
 RtspFramePusher::RtspFramePusher(const std::string &app, const std::string &stream, int codec_id, int port) :
@@ -48,11 +49,10 @@ RtspFramePusher::RtspFramePusher(const std::string &app, const std::string &stre
     cfg.port = m_out_port;
     cfg.audioCodec = RTSP_CODEC_ID_NONE;
     cfg.videoCodec = m_codec_id == 0 ? RTSP_CODEC_ID_VIDEO_H264 : RTSP_CODEC_ID_VIDEO_H265;
-    RTSP_LOG(INFO)<<"cfg.videoCodec : "<<cfg.videoCodec;
     sprintf(cfg.suffix,"/%s/%s", m_app_name.c_str(), m_stream_name.c_str());
     m_rtsp_handle = rtsp_init(&cfg, &RtspFramePusher::onClientConnect, &RtspFramePusher::onClientDisconnect, NULL);
     if(m_rtsp_handle == nullptr){
-        std::runtime_error("rtsp_init failed");
+        rtsp_err("rtsp init err\n");
         return;
     }
     m_output_url = std::string(m_rtsp_handle->outRtspUrl);
@@ -69,11 +69,11 @@ RtspFramePusher::~RtspFramePusher()
 bool RtspFramePusher::PushFrameData(const uint8_t *data, size_t size, uint64_t pts_)
 {
     if(!m_init_success){
-        std::runtime_error("RtspFramePusher not init success");
+        rtsp_err("RtspFramePusher not init success\n");
         return false;
     }
     if(data == nullptr || size == 0){
-        std::runtime_error("data is nullptr or size is 0");
+        rtsp_err("data is nullptr or size:[%lu] is 0\n", size);
         return false;
     }
     uint64_t pts = pts_;
@@ -81,22 +81,8 @@ bool RtspFramePusher::PushFrameData(const uint8_t *data, size_t size, uint64_t p
         pts = RtspFramePusher::GetMillTimestamp();
     }
     if(rtsp_server_write_video(m_rtsp_handle, data, size, pts) != RTSP_SUCC){
-        RTSP_LOG(ERROR)<<"rtsp_server_write_video failed";
+        rtsp_err("rtsp_server_write_video failed\n");
         return false;
     }
     return true;
 }
-
-bool RtspFramePusher::PushSeiFrame(const uint8_t *data, size_t size) 
-{    
-    if(!m_init_success){
-        std::runtime_error("RtspFramePusher not init success");
-        return false;
-    }
-    uint64_t pts = GetMillTimestamp();
-    if(rtsp_server_write_video(m_rtsp_handle, data, size, pts) != RTSP_SUCC){
-        RTSP_LOG(ERROR)<<"rtsp_server_write_video failed";
-        return false;
-    }
-    return true;
-} 

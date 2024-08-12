@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "comm.h"
+#include "rtsp_comm.h"
 #include "rtp_enc.h"
 
 struct rtphdr

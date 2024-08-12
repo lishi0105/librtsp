@@ -25,7 +25,6 @@ public:
     ~RtspFramePusher();
     RtspFramePusher(const std::string &app, const std::string &stream, int codec_id, int port = 0);
     bool PushFrameData(const uint8_t *data, size_t size, uint64_t pts = 0);
-    bool PushSeiFrame(const uint8_t *data, size_t size);
     std::string output_url() const { return m_output_url; }
     static uint64_t GetMillTimestamp();
 private:
