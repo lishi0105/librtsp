@@ -236,11 +236,13 @@ static int rtsp_msg_parse_startline (rtsp_msg_s *msg, const char *line)
 	if (ret != RTSP_MSG_METHOD_BUTT) {
 		msg->type = RTSP_MSG_TYPE_REQUEST;
 		msg->hdrs.startline.reqline.method = (rtsp_msg_method_e) ret;
-		while (isgraph(*p)) p++; p++; //next field
+		while (isgraph(*p)) p++; 
+		p++; //next field
 		ret = rtsp_msg_parse_uri(p,	&msg->hdrs.startline.reqline.uri);
 		if (ret <= 0)
 			return -1;
-		while (isgraph(*p)) p++; p++; //next field
+		while (isgraph(*p)) p++; 
+		p++; //next field
 		ret = rtsp_msg_str2int(rtsp_msg_version_tbl,
 				ARRAY_SIZE(rtsp_msg_version_tbl), p);
 		if (ret == RTSP_MSG_VERSION_BUTT) {
@@ -255,7 +257,8 @@ static int rtsp_msg_parse_startline (rtsp_msg_s *msg, const char *line)
 	if (ret != RTSP_MSG_VERSION_BUTT) {
 		msg->type = RTSP_MSG_TYPE_RESPONSE;
 		msg->hdrs.startline.resline.version = (rtsp_msg_version_e) ret;
-		while (isgraph(*p)) p++; p++; //next field
+		while (isgraph(*p)) p++; 
+		p++; //next field
 		if (sscanf(p, "%d", &ret) != 1) {
 			err("parse status-code failed. line: %s\n", line);
 			return -1;

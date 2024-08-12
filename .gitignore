@@ -1,8 +1,8 @@
 
-Debug
-Release
-build
-install
+**Debug
+**Release
+**build
+**install
 *.json
 *.ini
 *.o
@@ -39,4 +39,3 @@ install
 *.exe
 *.out
 *.app
->>>>>>> origin/master

@@ -543,7 +543,7 @@ static rtsp_session_handle rtsp_new_session (rtsp_demo_handle demo, const char *
 	if (NULL == s) {
 		goto fail;
 	}
-
+	memset(s->path, 0, sizeof(s->path));
 	strncpy(s->path, path, sizeof(s->path) - 1);
 	s->vcodec_id = RTSP_CODEC_ID_NONE;
 	s->acodec_id = RTSP_CODEC_ID_NONE;
@@ -678,7 +678,7 @@ static int rtsp_set_audio (rtsp_session_handle session, int codec_id, const uint
 static rtsp_session_handle create_rtsp_session(rtsp_demo_handle demo,rtsp_codec_id codecID, const char *path)
 {
     rtsp_session_handle session;
-    session = rtsp_new_session(demo,path);
+    session = rtsp_new_session(demo, path);
     rtsp_set_video(session, codecID, NULL, 0);
     //rtsp_set_audio(session, RTSP_CODEC_ID_AUDIO_G711A, NULL, 0);
 
@@ -1823,7 +1823,7 @@ static int rtsp_sever_tx_video(const RtspHandle* pHandle, const uint8_t *frame, 
 	while (start < len && packets[count] && pktsizs[count] > 0) {
 		const uint8_t *p = NULL;
 		int size = 0;
-		int ret;
+		int ret = 0;
 
 		p = rtsp_find_h264_h265_nalu(frame + start, len - start, &size);
 		if (!p) {
@@ -1881,7 +1881,7 @@ static int rtsp_tx_audio (rtsp_session_handle session, const uint8_t *frame, int
 	uint8_t *packets[ARTP_MAX_NBPKTS+1] = {NULL};
 	int  pktsizs[ARTP_MAX_NBPKTS+1] = {0};
 	int *pktlens[ARTP_MAX_NBPKTS] = {NULL};
-	int i, index, count;
+	int i = 0, index = 0, count = 0;
 
 	if (!s || !frame || s->acodec_id == RTSP_CODEC_ID_NONE)
 		return -1;
@@ -2167,7 +2167,7 @@ RtspHandle* rtsp_init(const rtsp_cfg *cfg, rtspClientConnect onConnect,rtspClien
 		err("create_rtsp_demo err!\n");
 		return NULL;
 	}
-	m_rtspHandle->g_session= create_rtsp_session(m_rtspHandle->g_demo,(rtsp_codec_id)cfg->videoCodec,cfg->suffix);
+	m_rtspHandle->g_session = create_rtsp_session(m_rtspHandle->g_demo, (rtsp_codec_id)cfg->videoCodec, cfg->suffix);
 	if(m_rtspHandle->g_session==NULL){
 		err("create_rtsp_session err!\n");
 		return NULL;
