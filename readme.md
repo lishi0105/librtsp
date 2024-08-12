@@ -2,12 +2,13 @@
  * @Author: 李石
  * @Date: 2024-08-12 10:00:34
  * @LastEditors: lishi
- * @LastEditTime: 2024-08-12 13:24:22
+ * @LastEditTime: 2024-08-12 13:26:55
  * @Description: 
  * Copyright (c) 2024 by ${lishi0105@163.com}, All Rights Reserved. 
 -->
-1. Linux下支持H264/H265编码的简单rtspserver库；
-2. 音频支持需要自行修改；
+1. Linux下支持H264/H265编码的简单rtspserver库;
+2. 音频支持需要自行修改;
+
 librtsp编译方式：
 ```bash
 # Relase
