@@ -2,7 +2,7 @@
  * @Author: 李石
  * @Date: 2024-08-12 10:00:34
  * @LastEditors: lishi
- * @LastEditTime: 2024-08-12 15:12:26
+ * @LastEditTime: 2024-08-12 15:32:37
  * @Description: 
  * Copyright (c) 2024 by ${lishi0105@163.com}, All Rights Reserved. 
 -->
@@ -12,8 +12,9 @@
 	> Mail: 544177215@qq.com 
 	> Created Time: Sunday, December 20, 2015 AM07:37:50 CST
 ```
-1. Linux下支持H264/H265编码的简单rtspserver库;
-2. 音频支持需要自行修改;
+1. Linux下支持H264/H265编码的简单rtspserver库的二次封装;
+2. 音频支持需要自行添加;
+3. 如有侵权请联系lishi0105@163.com，自行删除
 
 librtsp编译方式：
 ```bash
